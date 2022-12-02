@@ -64,7 +64,6 @@ public:
   kj::Array<jsg::Ref<TraceException>> getExceptions();
   kj::Maybe<kj::StringPtr> getScriptName();
   jsg::Optional<kj::StringPtr> getDispatchNamespace();
-  jsg::Optional<kj::Array<kj::StringPtr>> getScriptTags();
   kj::StringPtr getOutcome();
 
   uint getCpuTime();
@@ -77,7 +76,6 @@ public:
     JSG_READONLY_INSTANCE_PROPERTY(exceptions, getExceptions);
     JSG_READONLY_INSTANCE_PROPERTY(scriptName, getScriptName);
     JSG_READONLY_INSTANCE_PROPERTY(dispatchNamespace, getDispatchNamespace);
-    JSG_READONLY_INSTANCE_PROPERTY(scriptTags, getScriptTags);
     JSG_READONLY_INSTANCE_PROPERTY(outcome, getOutcome);
   }
 

@@ -44,7 +44,7 @@ enum class PipelineLogLevel {
 class Trace final : public kj::Refcounted {
   // Collects trace information about the handling of a worker/pipline fetch event.
 public:
-  explicit Trace(kj::Maybe<kj::String> stableId, kj::Maybe<kj::String> scriptName, kj::Maybe<kj::String> dispatchNamespace, kj::Array<kj::String> scriptTags);
+  explicit Trace(kj::Maybe<kj::String> stableId, kj::Maybe<kj::String> scriptName, kj::Maybe<kj::String> dispatchNamespace);
   Trace(rpc::Trace::Reader reader);
   ~Trace() noexcept(false);
   KJ_DISALLOW_COPY(Trace);
@@ -165,7 +165,6 @@ public:
 
   kj::Maybe<kj::String> scriptName;
   kj::Maybe<kj::String> dispatchNamespace;
-  kj::Array<kj::String> scriptTags;
 
   kj::Vector<Log> logs;
   kj::Vector<Exception> exceptions;
@@ -427,8 +426,7 @@ public:
   kj::Own<WorkerTracer> makeWorkerTracer(PipelineLogLevel pipelineLogLevel,
                                          kj::Maybe<kj::String> stableId,
                                          kj::Maybe<kj::String> scriptName,
-                                         kj::Maybe<kj::String> dispatchNamespace,
-                                         kj::Array<kj::String> scriptTags);
+                                         kj::Maybe<kj::String> dispatchNamespace);
   // Makes a tracer for a worker stage.
 
 private:
