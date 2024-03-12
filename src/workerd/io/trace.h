@@ -51,7 +51,7 @@ enum class PipelineLogLevel {
 class Trace final : public kj::Refcounted {
 public:
   explicit Trace(kj::Maybe<kj::String> stableId, kj::Maybe<kj::String> scriptName,
-      kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion,
+      kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion, kj::Maybe<kj::String> scriptId,
       kj::Maybe<kj::String> dispatchNamespace, kj::Array<kj::String> scriptTags);
   Trace(rpc::Trace::Reader reader);
   ~Trace() noexcept(false);
@@ -260,6 +260,7 @@ public:
 
   kj::Maybe<kj::String> scriptName;
   kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion;
+  kj::Maybe<kj::String> scriptId;
   kj::Maybe<kj::String> dispatchNamespace;
   kj::Array<kj::String> scriptTags;
 
@@ -300,7 +301,7 @@ class WorkerTracer;
 // A tracer which records traces for a set of stages. All traces for a pipeline's stages and
 // possible subpipeline stages are recorded here, where they can be used to call a pipeline's
 // trace worker.
-class PipelineTracer final : public kj::Refcounted {
+class PipelineTracer : public kj::Refcounted {
 public:
   // Creates a pipeline tracer (with a possible parent).
   explicit PipelineTracer(kj::Maybe<kj::Own<PipelineTracer>> parentPipeline = kj::none)
@@ -318,7 +319,8 @@ public:
     return kj::refcounted<PipelineTracer>(kj::addRef(*this));
   }
 
-  kj::Own<WorkerTracer> makeWorkerTracer(PipelineLogLevel pipelineLogLevel,
+  virtual kj::Own<WorkerTracer> makeWorkerTracer(PipelineLogLevel pipelineLogLevel,
+                                         kj::Maybe<kj::String> scriptId,
                                          kj::Maybe<kj::String> stableId,
                                          kj::Maybe<kj::String> scriptName,
                                          kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion,
@@ -326,8 +328,9 @@ public:
                                          kj::Array<kj::String> scriptTags);
   // Makes a tracer for a worker stage.
 
-private:
+protected:
   kj::Vector<kj::Own<Trace>> traces;
+private:
   kj::Maybe<kj::Own<kj::PromiseFulfiller<kj::Array<kj::Own<Trace>>>>> completeFulfiller;
 
   kj::Maybe<kj::Own<PipelineTracer>> parentTracer;
@@ -339,7 +342,7 @@ private:
 // Tracer are released, its Trace is considered complete and ready for submission. If the Trace to
 // write to isn't provided (that already exists in a PipelineTracer), the trace must by extracted
 // via extractTrace.
-class WorkerTracer final : public kj::Refcounted {
+class WorkerTracer : public kj::Refcounted {
 public:
   explicit WorkerTracer(kj::Own<PipelineTracer> parentPipeline,
       kj::Own<Trace> trace, PipelineLogLevel pipelineLogLevel);
@@ -352,7 +355,7 @@ public:
   // TODO(soon): Eventually:
   //void setMetrics(...) // Or get from MetricsCollector::Request directly?
 
-  void addException(kj::Date timestamp, kj::String name, kj::String message);
+  virtual void addException(kj::Date timestamp, kj::String name, kj::String message);
 
   void addDiagnosticChannelEvent(kj::Date timestamp, kj::String channel,
                                  kj::Array<kj::byte> message);
@@ -376,7 +379,7 @@ public:
 
   // Sets the main trace of this Tracer to match the content of `reader`. This is used in the
   // parent process after receiving a trace from a process sandbox.
-  void setTrace(rpc::Trace::Reader reader);
+  virtual void setTrace(rpc::Trace::Reader reader);
 
 private:
   PipelineLogLevel pipelineLogLevel;
