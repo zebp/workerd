@@ -51,7 +51,7 @@ enum class PipelineLogLevel {
 class Trace final : public kj::Refcounted {
 public:
   explicit Trace(kj::Maybe<kj::String> stableId, kj::Maybe<kj::String> scriptName,
-      kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion,
+      kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion, kj::Maybe<kj::String> scriptId,
       kj::Maybe<kj::String> dispatchNamespace, kj::Array<kj::String> scriptTags);
   Trace(rpc::Trace::Reader reader);
   ~Trace() noexcept(false);
@@ -260,6 +260,7 @@ public:
 
   kj::Maybe<kj::String> scriptName;
   kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion;
+  kj::Maybe<kj::String> scriptId;
   kj::Maybe<kj::String> dispatchNamespace;
   kj::Array<kj::String> scriptTags;
 
@@ -276,6 +277,9 @@ public:
   kj::Duration cpuTime;
   kj::Duration wallTime;
 
+  // If we add an exception we do a check to see if the script has sourcemaps available so
+  // we can remap the stacktrace.
+  bool sourcemapsAvailable = false;
   bool exceededLogLimit = false;
   bool exceededExceptionLimit = false;
   bool exceededDiagnosticChannelEventLimit = false;
@@ -318,7 +322,8 @@ public:
     return kj::refcounted<PipelineTracer>(kj::addRef(*this));
   }
 
-  kj::Own<WorkerTracer> makeWorkerTracer(PipelineLogLevel pipelineLogLevel,
+  virtual kj::Own<WorkerTracer> makeWorkerTracer(PipelineLogLevel pipelineLogLevel,
+                                         kj::Maybe<kj::String> scriptId,
                                          kj::Maybe<kj::String> stableId,
                                          kj::Maybe<kj::String> scriptName,
                                          kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion,
@@ -326,8 +331,9 @@ public:
                                          kj::Array<kj::String> scriptTags);
   // Makes a tracer for a worker stage.
 
-private:
+protected:
   kj::Vector<kj::Own<Trace>> traces;
+private:
   kj::Maybe<kj::Own<kj::PromiseFulfiller<kj::Array<kj::Own<Trace>>>>> completeFulfiller;
 
   kj::Maybe<kj::Own<PipelineTracer>> parentTracer;
@@ -352,7 +358,8 @@ public:
   // TODO(soon): Eventually:
   //void setMetrics(...) // Or get from MetricsCollector::Request directly?
 
-  void addException(kj::Date timestamp, kj::String name, kj::String message);
+  void addException(kj::Date timestamp, kj::String name,
+      kj::String message, bool sourcemapsAvailable);
 
   void addDiagnosticChannelEvent(kj::Date timestamp, kj::String channel,
                                  kj::Array<kj::byte> message);
@@ -376,7 +383,7 @@ public:
 
   // Sets the main trace of this Tracer to match the content of `reader`. This is used in the
   // parent process after receiving a trace from a process sandbox.
-  void setTrace(rpc::Trace::Reader reader);
+  virtual void setTrace(rpc::Trace::Reader reader);
 
 private:
   PipelineLogLevel pipelineLogLevel;
