@@ -227,8 +227,8 @@ Trace::Log::Log(kj::Date timestamp, LogLevel logLevel, kj::String message)
       logLevel(logLevel),
       message(kj::mv(message)) {}
 
-Trace::Exception::Exception(kj::Date timestamp, kj::String name, kj::String message)
-    : timestamp(timestamp), name(kj::mv(name)), message(kj::mv(message)) {}
+Trace::Exception::Exception(kj::Date timestamp, kj::String name, kj::String message, kj::String stack)
+    : timestamp(timestamp), name(kj::mv(name)), message(kj::mv(message)), stack(kj::mv(stack)) {}
 
 Trace::Trace(kj::Maybe<kj::String> stableId, kj::Maybe<kj::String> scriptName,
   kj::Maybe<kj::Own<ScriptVersion::Reader>> scriptVersion,  kj::Maybe<kj::String> dispatchNamespace,
@@ -335,6 +335,7 @@ void Trace::Exception::copyTo(rpc::Trace::Exception::Builder builder) {
   builder.setTimestampNs((timestamp - kj::UNIX_EPOCH) / kj::NANOSECONDS);
   builder.setName(name);
   builder.setMessage(message);
+  builder.setStack(stack);
 }
 
 void Trace::mergeFrom(rpc::Trace::Reader reader, PipelineLogLevel pipelineLogLevel) {
@@ -420,7 +421,8 @@ Trace::Log::Log(rpc::Trace::Log::Reader reader)
 Trace::Exception::Exception(rpc::Trace::Exception::Reader reader)
     : timestamp(kj::UNIX_EPOCH + reader.getTimestampNs() * kj::NANOSECONDS),
       name(kj::str(reader.getName())),
-      message(kj::str(reader.getMessage())) {}
+      message(kj::str(reader.getMessage())),
+      stack(kj::str(reader.getStack())) {}
 
 SpanBuilder& SpanBuilder::operator=(SpanBuilder &&other) {
   end();
@@ -537,7 +539,7 @@ void WorkerTracer::log(kj::Date timestamp, LogLevel logLevel, kj::String message
   trace->logs.add(timestamp, logLevel, kj::mv(message));
 }
 
-void WorkerTracer::addException(kj::Date timestamp, kj::String name, kj::String message) {
+void WorkerTracer::addException(kj::Date timestamp, kj::String name, kj::String message, kj::String stack) {
   if (trace->exceededExceptionLimit) {
     return;
   }
@@ -547,16 +549,17 @@ void WorkerTracer::addException(kj::Date timestamp, kj::String name, kj::String 
   if (pipelineLogLevel == PipelineLogLevel::NONE) {
     return;
   }
-  size_t newSize = trace->bytesUsed + sizeof(Trace::Exception) + name.size() + message.size();
+  size_t newSize = trace->bytesUsed + sizeof(Trace::Exception) + name.size() + message.size() + stack.size();
   if (newSize > MAX_TRACE_BYTES) {
     trace->exceededExceptionLimit = true;
     trace->exceptions.add(
         timestamp, kj::str("Error"),
-        kj::str("Trace resource limit exceeded; subsequent exceptions not recorded."));
+        kj::str("Trace resource limit exceeded; subsequent exceptions not recorded."),
+        kj::str());
     return;
   }
   trace->bytesUsed = newSize;
-  trace->exceptions.add(timestamp, kj::mv(name), kj::mv(message));
+  trace->exceptions.add(timestamp, kj::mv(name), kj::mv(message), kj::mv(stack));
 }
 
 void WorkerTracer::addDiagnosticChannelEvent(kj::Date timestamp,

@@ -161,8 +161,13 @@ void addExceptionToTrace(jsg::Lock& js,
   KJ_IF_SOME(m, error.message) {
     message = kj::str(m);
   }
+  kj::String stack;
+  KJ_IF_SOME(s, error.stack) {
+    stack = kj::str(s);
+  }
+
   // TODO(someday): Limit size of exception content?
-  tracer.addException(timestamp, kj::mv(name), kj::mv(message));
+  tracer.addException(timestamp, kj::mv(name), kj::mv(message), kj::mv(stack));
 }
 
 void reportStartupError(
