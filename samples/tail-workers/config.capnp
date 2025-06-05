@@ -13,7 +13,7 @@ const helloWorld :Workerd.Worker = (
     (name = "worker", esModule = embed "worker.js")
   ],
   compatibilityDate = "2024-10-14",
-  compatibilityFlags = ["experimental", "streaming_tail_worker"],
+  compatibilityFlags = ["experimental", "streaming_tail_worker", "tail_worker_user_spans"],
   tails = ["log"],
   streamingTails = ["log"],
 );
@@ -23,4 +23,5 @@ const logWorker :Workerd.Worker = (
     (name = "worker", esModule = embed "tail.js")
   ],
   compatibilityDate = "2024-10-14",
+  compatibilityFlags = ["experimental", "tail_worker_user_spans"],
 );

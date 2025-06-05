@@ -4,6 +4,9 @@
 
 export default {
   async fetch(req, env) {
+    const resp = await fetch("https://google.com");
+    console.log({ status: resp.status });
+
     console.log('hello to the tail worker!');
     reportError('boom');
     reportError(new Error('test'));

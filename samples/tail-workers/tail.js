@@ -5,7 +5,7 @@
 export default {
   // https://developers.cloudflare.com/workers/observability/logs/tail-workers/
   tail(traces) {
-    console.log(traces[0].logs);
+    console.log(traces);
   },
   tailStream(...args) {
     console.log(...args);

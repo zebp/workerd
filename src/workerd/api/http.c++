@@ -1883,6 +1883,10 @@ jsg::Promise<jsg::Ref<Response>> fetchImplNoOutputLock(jsg::Lock& js,
 
   auto& ioContext = IoContext::current();
 
+  auto traceSpan = ioContext.makeTraceSpan("fetch"_kjc);
+  auto userSpan = ioContext.makeUserTraceSpan("fetch"_kjc);
+  TraceContext traceContext(kj::mv(traceSpan), kj::mv(userSpan));
+
   auto signal = jsRequest->getSignal();
   KJ_IF_SOME(s, signal) {
     // If the AbortSignal has already been triggered, then we need to stop here.
@@ -1894,7 +1898,7 @@ jsg::Promise<jsg::Ref<Response>> fetchImplNoOutputLock(jsg::Lock& js,
   // TODO(cleanup): Don't convert to HttpClient. Use the HttpService interface instead. This
   //   requires a significant rewrite of the code below. It'll probably get simpler, though?
   kj::Own<kj::HttpClient> client =
-      asHttpClient(fetcher->getClient(ioContext, jsRequest->serializeCfBlobJson(js), "fetch"_kjc));
+      asHttpClient(fetcher->getClient(ioContext, jsRequest->serializeCfBlobJson(js), traceContext));
 
   kj::HttpHeaders headers(ioContext.getHeaderTable());
   jsRequest->shallowCopyHeadersTo(headers);
@@ -2589,6 +2593,22 @@ kj::Own<WorkerInterface> Fetcher::getClient(
     KJ_CASE_ONEOF(channel, uint) {
       return ioContext.getSubrequestChannel(
           channel, isInHouse, kj::mv(cfStr), kj::mv(operationName));
+    }
+    KJ_CASE_ONEOF(outgoingFactory, IoOwn<OutgoingFactory>) {
+      return outgoingFactory->newSingleUseClient(kj::mv(cfStr));
+    }
+    KJ_CASE_ONEOF(outgoingFactory, kj::Own<CrossContextOutgoingFactory>) {
+      return outgoingFactory->newSingleUseClient(ioContext, kj::mv(cfStr));
+    }
+  }
+  KJ_UNREACHABLE;
+}
+
+kj::Own<WorkerInterface> Fetcher::getClient(
+    IoContext& ioContext, kj::Maybe<kj::String> cfStr, TraceContext& traceContext) {
+  KJ_SWITCH_ONEOF(channelOrClientFactory) {
+    KJ_CASE_ONEOF(channel, uint) {
+      return ioContext.getSubrequestChannel(channel, isInHouse, kj::mv(cfStr), traceContext);
     }
     KJ_CASE_ONEOF(outgoingFactory, IoOwn<OutgoingFactory>) {
       return outgoingFactory->newSingleUseClient(kj::mv(cfStr));
