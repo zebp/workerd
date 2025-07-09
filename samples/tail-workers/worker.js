@@ -4,6 +4,9 @@
 
 export default {
   async fetch(req, env) {
+    const resp = await fetch("https://cloudflare.com");
+    console.log((await resp.text()).length);
+
     console.log('hello to the tail worker!');
     reportError('boom');
     reportError(new Error('test'));

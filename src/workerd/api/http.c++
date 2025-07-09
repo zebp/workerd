@@ -1891,10 +1891,16 @@ jsg::Promise<jsg::Ref<Response>> fetchImplNoOutputLock(jsg::Lock& js,
     }
   }
 
+  auto traceContext = ioContext.makeTraceContext("fetch"_kjc);
+
   // TODO(cleanup): Don't convert to HttpClient. Use the HttpService interface instead. This
   //   requires a significant rewrite of the code below. It'll probably get simpler, though?
-  kj::Own<kj::HttpClient> client =
-      asHttpClient(fetcher->getClient(ioContext, jsRequest->serializeCfBlobJson(js), "fetch"_kjc));
+  auto clientInterface = fetcher->getClientWithTraceContext(
+      ioContext, jsRequest->serializeCfBlobJson(js), traceContext);
+  kj::Own<kj::HttpClient> client = asHttpClient(kj::mv(clientInterface));
+
+  traceContext.userSpan.setTag("network.protocol.name"_kjc, kj::str("http"));
+  traceContext.userSpan.setTag("network.protocol.version"_kjc, kj::str("HTTP/1.1"));
 
   kj::HttpHeaders headers(ioContext.getHeaderTable());
   jsRequest->shallowCopyHeadersTo(headers);
@@ -1920,6 +1926,49 @@ jsg::Promise<jsg::Ref<Response>> fetchImplNoOutputLock(jsg::Lock& js,
     default:
       KJ_UNREACHABLE;
   }
+
+  KJ_IF_SOME(userAgent, headers.get(headerIds.userAgent)) {
+    traceContext.userSpan.setTag("user_agent.original"_kjc, kj::str(userAgent));
+  }
+
+  KJ_IF_SOME(contentType, headers.get(headerIds.contentType)) {
+    traceContext.userSpan.setTag("http.mime_type"_kjc, kj::str(contentType));
+  }
+
+  KJ_IF_SOME(accept, headers.get(headerIds.accept)) {
+    traceContext.userSpan.setTag("http.accepts"_kjc, kj::str(accept));
+  }
+
+  KJ_IF_SOME(contentLength, headers.get(headerIds.contentLength)) {
+    // TODO: ensure that this is a valid positive integer
+    traceContext.userSpan.setTag("http.request.body.size"_kjc, kj::str(contentLength));
+  }
+
+  kj::Url& clientUrl = urlList.front();
+
+  // TODO: This might not actually be the URL that the client requested, since the `toString`
+  // isn't naive and will omit things like the fragment and user info. However, I'm not sure if
+  // the JS URL class even allows that.
+  kj::String clientUrlStr = clientUrl.toString(kj::Url::HTTP_PROXY_REQUEST);
+  traceContext.userSpan.setTag("url.full"_kjc, kj::str(clientUrlStr));
+  traceContext.userSpan.setTag("url.scheme"_kjc, kj::str(clientUrl.scheme));
+  traceContext.userSpan.setTag("server.address"_kjc, kj::str(clientUrl.host));
+
+  kj::String path;
+  for (auto& segment: clientUrl.path) {
+    path = kj::str(path, "/", segment);
+  }
+
+  traceContext.userSpan.setTag("url.path"_kjc, kj::str(path));
+
+  kj::String query;
+  bool first = true;
+  for (auto& segment: clientUrl.query) {
+    query = kj::str(query, first ? "?" : "&", uriEncodeControlChars(segment.name.asBytes()), "=",
+        uriEncodeControlChars(segment.value.asBytes()));
+    first = false;
+  }
+  traceContext.userSpan.setTag("url.query"_kjc, kj::str(query));
 
   kj::String url =
       uriEncodeControlChars(urlList.back().toString(kj::Url::HTTP_PROXY_REQUEST).asBytes());
@@ -2590,6 +2639,22 @@ kj::Own<WorkerInterface> Fetcher::getClient(
     KJ_CASE_ONEOF(channel, uint) {
       return ioContext.getSubrequestChannel(
           channel, isInHouse, kj::mv(cfStr), kj::mv(operationName));
+    }
+    KJ_CASE_ONEOF(outgoingFactory, IoOwn<OutgoingFactory>) {
+      return outgoingFactory->newSingleUseClient(kj::mv(cfStr));
+    }
+    KJ_CASE_ONEOF(outgoingFactory, kj::Own<CrossContextOutgoingFactory>) {
+      return outgoingFactory->newSingleUseClient(ioContext, kj::mv(cfStr));
+    }
+  }
+  KJ_UNREACHABLE;
+}
+
+kj::Own<WorkerInterface> Fetcher::getClientWithTraceContext(
+    IoContext& ioContext, kj::Maybe<kj::String> cfStr, TraceContext& traceContext) {
+  KJ_SWITCH_ONEOF(channelOrClientFactory) {
+    KJ_CASE_ONEOF(channel, uint) {
+      return ioContext.getSubrequestChannel(channel, isInHouse, kj::mv(cfStr), traceContext);
     }
     KJ_CASE_ONEOF(outgoingFactory, IoOwn<OutgoingFactory>) {
       return outgoingFactory->newSingleUseClient(kj::mv(cfStr));

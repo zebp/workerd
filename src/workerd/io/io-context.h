@@ -887,6 +887,15 @@ class IoContext final: public kj::Refcounted, private kj::TaskSet::ErrorHandler 
   [[nodiscard]] SpanBuilder makeTraceSpan(kj::ConstString operationName);
   [[nodiscard]] SpanBuilder makeUserTraceSpan(kj::ConstString operationName);
 
+  // Returns a TraceContext for recording tracing spans with the same operation name for both
+  // the internal span and the user span. Acts as a convenience method for creating duplicate
+  // calls to makeTraceSpan() and makeUserTraceSpan() with the same operation name.
+  [[nodiscard]] TraceContext makeTraceContext(kj::ConstString operationName) {
+    auto span = makeTraceSpan(kj::ConstString(kj::str(operationName)));
+    auto userSpan = makeUserTraceSpan(kj::mv(operationName));
+    return TraceContext(kj::mv(span), kj::mv(userSpan));
+  }
+
   // Implement per-IoContext rate limiting for Cache.put(). Pass the body of a Cache API PUT
   // request and get a possibly wrapped stream back.
   //
