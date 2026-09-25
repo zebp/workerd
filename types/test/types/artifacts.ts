@@ -27,4 +27,27 @@ async function testRepositoryReads(): Promise<void> {
   repo.name;
 }
 
+async function testRepositoryDisposal(): Promise<void> {
+  // The repository capability is an RPC stub and supports explicit resource management.
+  using repo = await artifacts.get('example');
+  expectType<ArtifactsRepoInfo>(await repo.info());
+}
+
+async function testCreateResult(): Promise<void> {
+  const created = await artifacts.create('example');
+  expectType<string>(created.token);
+}
+
+function testErrorCodes(code: ArtifactsErrorCode): void {
+  switch (code) {
+    case 'CREATE_IN_PROGRESS':
+    case 'IMPORT_IN_PROGRESS':
+    case 'FORK_IN_PROGRESS':
+      return;
+  }
+}
+
 void testRepositoryReads;
+void testRepositoryDisposal;
+void testCreateResult;
+void testErrorCodes;

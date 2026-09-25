@@ -47,8 +47,6 @@ interface ArtifactsCreateRepoResult {
   remote: string;
   /** Plaintext access token (only returned at creation time). */
   token: string;
-  /** ISO 8601 token expiry timestamp. */
-  tokenExpiresAt: string;
 }
 
 /** Paginated list of repositories. */
@@ -155,8 +153,11 @@ interface ArtifactsCommitMetadata {
  *
  * Metadata is available through {@link info}, not as properties on the capability.
  * Methods may throw `ArtifactsError` with code `INTERNAL_ERROR` if an unexpected service error occurs.
+ *
+ * The capability is an RPC stub. Dispose of it when finished, for example with
+ * `using repo = await env.ARTIFACTS.get(name);`, to release it before the request ends.
  */
-interface ArtifactsRepo {
+interface ArtifactsRepo extends Disposable {
   /**
    * Create an access token for this repo.
    * @param scope Token scope: "write" (default) or "read".
@@ -275,6 +276,7 @@ interface ArtifactsRepo {
 type ArtifactsErrorCode =
   | 'ALREADY_EXISTS'
   | 'NOT_FOUND'
+  | 'CREATE_IN_PROGRESS'
   | 'IMPORT_IN_PROGRESS'
   | 'FORK_IN_PROGRESS'
   | 'INVALID_INPUT'
@@ -327,6 +329,7 @@ interface Artifacts {
    * @param name Repository name.
    * @returns Repo handle.
    * @throws {ArtifactsError} with code `NOT_FOUND` if the repo does not exist.
+   * @throws {ArtifactsError} with code `CREATE_IN_PROGRESS` if the repo is still being created.
    * @throws {ArtifactsError} with code `IMPORT_IN_PROGRESS` if the repo is still importing.
    * @throws {ArtifactsError} with code `FORK_IN_PROGRESS` if the repo is still forking.
    */
